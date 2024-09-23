@@ -2,10 +2,16 @@
 
 ## Requirements
 
-- Ruby 3.3.5
-- Bundler 2.4.22
+- Ruby 3.1.2
+- Bundler 2.3.7
 
 ## Installation
+
+```bash
+# Change RubyGems install path
+echo 'GEM_HOME="$HOME/.gems"' >> ~/.bashrc
+source .bashrc
+```
 
 ```sh
 sudo apt install ruby-full
