@@ -10,12 +10,12 @@ require 'toml'
 
 # ---------- Lib ----------
 
-require_relative File.join(File.dirname(__FILE__), '..', '..', 'lib', 'moonraker')
+require_relative File.join(File.dirname(__FILE__), '..', '..', 'lib', 'tracker')
 
 # ---------- Interrupts ----------
 
-trap('SIGINT') { @moonraker.stop }
-trap('SIGTERM') { @moonraker.stop }
+trap('SIGINT') { @tracker.stop }
+trap('SIGTERM') { @tracker.stop }
 
 # ---------- Set up config ----------
 
@@ -41,8 +41,8 @@ end
 
 # ---------- Do The Thing ----------
 
-@moonraker = Moonraker.new(@config)
-@moonraker.start
+@tracker = Moonraker::Tracker.new(@config)
+@tracker.start
 
 puts 'Ctrl-C to exit'
-@moonraker.wait
+@tracker.wait
