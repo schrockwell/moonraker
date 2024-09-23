@@ -2,13 +2,13 @@ latitude = 0.000000
 longitude = 0.000000
 
 [azimuth]
-delta = 0.1
 port = "/todo"
 baud = 9600
 index = 1
+delta = 0.1
 
 [elevation]
-delta = 0.1
 port = "/todo"
 baud = 9600
 index = 1
+delta = 0.1

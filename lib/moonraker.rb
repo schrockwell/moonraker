@@ -63,9 +63,12 @@ class Moonraker
   
     az_index = @config['azimuth']['index'] || 1
     el_index = @config['elevation']['index'] || 1
+
+    az_degrees = coords.az.round(1)
+    el_degrees = [coords.el.round(1), 0].max # don't go below 0°
   
-    az_command = "AP#{az_index}#{coords.az.round(1)}\r;"
-    el_command = "AP#{el_index}}#{coords.el.round(1)}\r;"
+    az_command = "AP#{az_index}#{az_degrees}\r;"
+    el_command = "AP#{el_index}}#{el_degrees}\r;"
   
     @az_uart.write(az_command)
     @el_uart.write(el_command)
