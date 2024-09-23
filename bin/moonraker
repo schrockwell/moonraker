@@ -1,0 +1,48 @@
+#! /usr/bin/env ruby
+
+# ---------- Standard library ----------
+
+require 'fileutils'
+
+# ---------- Gems ----------
+
+require 'toml'
+
+# ---------- Lib ----------
+
+require_relative File.join(File.dirname(__FILE__), '..', '..', 'lib', 'moonraker')
+
+# ---------- Interrupts ----------
+
+trap('SIGINT') { @moonraker.stop }
+trap('SIGTERM') { @moonraker.stop }
+
+# ---------- Set up config ----------
+
+@etc_path = File.join(File.dirname(__FILE__), '..', 'etc')
+@config_path = File.join(@etc_path, 'config.toml')
+
+if File.exist?(@config_path)
+  @config = TOML.load_file(@config_path)
+  puts "Loaded config from #{File.absolute_path(@config_path)}"
+else
+  print 'Config file not found. Would you like to create one? (y/n): '
+  answer = gets.chomp
+  if answer == 'y'
+    FileUtils.cp(File.join(@etc_path, 'config.example.toml'), @config_path)
+
+    puts 'Please edit etc/config.toml and try again.'
+    exit
+  else
+    puts 'Cannot continue without a config file.'
+    exit
+  end
+end
+
+# ---------- Do The Thing ----------
+
+@moonraker = Moonraker.new(@config)
+@moonraker.start
+
+puts 'Ctrl-C to exit'
+@moonraker.wait
