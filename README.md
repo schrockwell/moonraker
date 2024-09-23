@@ -8,19 +8,20 @@
 ## Installation
 
 ```bash
-# Change RubyGems install path
+# Change RubyGems install path to home dir
 echo 'GEM_HOME="$HOME/.gems"' >> ~/.bashrc
 source .bashrc
-```
 
-```sh
+# Install Ruby
 sudo apt install ruby-full
+
+# Install gems
 bundle
 ```
 
 ## Configuration
 
-`cp ./etc/config.example.toml ./etc/config.toml` and edit the config file
+`cp etc/config.example.toml etc/config.toml` and edit the config file
 
 ## Calibration
 
@@ -28,6 +29,6 @@ TODO!
 
 ## Start Tracking
 
-`./bin/track`
+`bin/track`
 
 Ctrl-C to exit.
