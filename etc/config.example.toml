@@ -3,12 +3,12 @@ longitude = 0.000000
 
 [azimuth]
 port = "/todo"
-baud = 9600
+baud = 4800
 index = 1
 delta = 0.1
 
 [elevation]
 port = "/todo"
-baud = 9600
+baud = 4800
 index = 1
 delta = 0.1
