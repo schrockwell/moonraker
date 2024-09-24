@@ -41,7 +41,7 @@ end
 
 # ---------- Do The Thing ----------
 
-@tracker = Moonraker::Tracker.new(@config)
+@tracker = Moonraker::Tracker.new(@config, @etc_path)
 @tracker.start
 
 puts 'Ctrl-C to exit'

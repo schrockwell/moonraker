@@ -12,12 +12,16 @@ module Moonraker
   class GreenHeronRT21
     include Loggable
 
+    attr_reader :heading
+    attr_accessor :on_heading
+
     def initialize(name, config)
       @name = name
       @port = config['port']
       @baud = config['baud']
       @index = config['index']
-      @current_angle = nil
+      @heading = nil
+      @on_heading = nil
 
       raise "#{@name} rotor not found: #{@port}" unless File.exist?(@port)
     end
@@ -26,13 +30,19 @@ module Moonraker
       @uart = UART.open(@port, @baud)
       log "Opened #{@name} rotor"
 
+      read_heading
+      
       @poll_thread = poll_thread
     end
 
-    def turn(angle)
-      degrees = '%05.1f' % angle
+    def turn(heading)
+      degrees = '%05.1f' % heading
       command = "AP#{@index}#{degrees}\r;"
       @uart.write(command)
+    end
+
+    def stop
+      @uart.write(";")
     end
 
     def close
@@ -45,12 +55,18 @@ module Moonraker
     def poll_thread
       Thread.new do
         loop do
-          @uart.write("BI#{@index};")
-          response = @uart.read_next_string_command(';')
-          @current_angle = response.to_f
+          read_heading
           sleep 1
         end
       end
+    end
+    
+    def read_heading
+      @uart.write("BI#{@index};")
+      response = @uart.read_next_string_command(';')
+      prev_heading = @heading
+      @heading = response.to_f
+      @on_heading&.call(@heading) if @heading != prev_heading
     end
   end
 end

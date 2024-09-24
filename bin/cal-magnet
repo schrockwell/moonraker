@@ -1,0 +1,29 @@
+#! /usr/bin/env ruby
+
+# ---------- Standard library ----------
+
+require 'fileutils'
+
+# ---------- Gems ----------
+
+require 'toml'
+
+# ---------- Lib ----------
+
+require_relative '../lib/magnet_cal'
+
+# ---------- Interrupts ----------
+
+trap('SIGINT') { @cal.abort }
+trap('SIGTERM') { @cal.abort }
+
+# ---------- Set up config ----------
+
+@etc_path = File.join(File.dirname(__FILE__), '..', 'etc')
+@config_path = File.join(@etc_path, 'config.toml')
+@config = TOML.load_file(@config_path)
+
+# ---------- Do The Thing ----------
+
+@cal = Moonraker::MagnetCal.new(@config, @etc_path)
+@cal.run
