@@ -67,8 +67,8 @@ module Moonraker
       az_index = @config['azimuth']['index'] || 1
       el_index = @config['elevation']['index'] || 1
 
-      az_degrees = coords.az.round(1)
-      el_degrees = [coords.el.round(1), 0].max # don't go below 0°
+      az_degrees = '%05.1f' % coords.az
+      el_degrees = '%05.1f' % [coords.el, 0].max # don't go below 0°
     
       az_command = "AP#{az_index}#{az_degrees}\r;"
       el_command = "AP#{el_index}#{el_degrees}\r;"
