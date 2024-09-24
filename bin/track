@@ -10,7 +10,7 @@ require 'toml'
 
 # ---------- Lib ----------
 
-require_relative File.join(File.dirname(__FILE__), '..', '..', 'lib', 'tracker')
+require_relative File.join(File.dirname(__FILE__), '..', 'lib', 'tracker')
 
 # ---------- Interrupts ----------
 
