@@ -62,7 +62,7 @@ module Moonraker
       el_delta = @config['elevation']['delta']
       return if @prev_coords != nil && (coords.az - @prev_coords.az).abs < az_delta && (coords.el - @prev_coords.el).abs < el_delta
     
-      log "Az: #{coords.az.round(1)}° El: #{coords.el.round(1)}°"
+      log "AZ: #{coords.az.round(1)}° EL: #{coords.el.round(1)}°"
     
       az_index = @config['azimuth']['index'] || 1
       el_index = @config['elevation']['index'] || 1
@@ -73,6 +73,9 @@ module Moonraker
       az_command = "AP#{az_index}#{az_degrees}\r;"
       el_command = "AP#{el_index}}#{el_degrees}\r;"
     
+      log "Sending AZ command: #{az_command.inspect}"
+      log "Sending EL command: #{el_command.inspect}"
+
       @az_uart.write(az_command) if @az_uart
       @el_uart.write(el_command) if @el_uart
     
