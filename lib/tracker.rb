@@ -5,7 +5,11 @@ require 'ostruct'
 # ---------- Gems ----------
 
 require 'astronoby'
-require 'uart'
+
+# ---------- Moonraker Libs ----------
+
+require_relative 'green_heron_rt21'
+require_relative 'loggable'
 
 # ---------- Moonraker Class ----------
 
@@ -18,16 +22,14 @@ module Moonraker
         latitude: Astronoby::Angle.from_degrees(@config['latitude']),
         longitude: Astronoby::Angle.from_degrees(@config['longitude'])
       )
+
+      @az_rotor = GreenHeronRT21.new('AZ', @config['azimuth'])
+      @el_rotor = GreenHeronRT21.new('EL', @config['elevation'])
     end
 
     def start
-      raise "Azimuth rotor not found: #{@config['azimuth']['port']}" unless File.exist? @config['azimuth']['port']
-      @az_uart = UART.open @config['azimuth']['port'], @config['azimuth']['baud']
-      log "Opened azimuth port #{@config['azimuth']['port']} at #{@config['azimuth']['baud']} baud"
-      
-      raise "Elevation rotor not found: #{@config['elevation']['port']}" unless File.exist? @config['elevation']['port']
-      @el_uart = UART.open @config['elevation']['port'], @config['elevation']['baud']
-      log "Opened elevation port #{@config['elevation']['port']} at #{@config['elevation']['baud']} baud"
+      @az_rotor.open
+      @el_rotor.open
       
       @moon_position_thread = Thread.new do
         loop do
@@ -42,8 +44,8 @@ module Moonraker
 
     def wait
       @moon_position_thread.join
-      @az_uart.close if @az_uart
-      @el_uart.close if @el_uart
+      @az_rotor.close
+      @el_rotor.close
     end
 
     def stop
@@ -51,10 +53,6 @@ module Moonraker
     end
 
     private
-
-    def log(msg)
-      puts "[#{Time.now.utc}] #{msg}"
-    end
 
     def update_moon_coordinates(coords)
       # only update if > 0.1° change
@@ -64,20 +62,8 @@ module Moonraker
     
       log "AZ: #{coords.az.round(1)}° EL: #{coords.el.round(1)}°"
     
-      az_index = @config['azimuth']['index'] || 1
-      el_index = @config['elevation']['index'] || 1
-
-      az_degrees = '%05.1f' % coords.az
-      el_degrees = '%05.1f' % [coords.el, 0].max # don't go below 0°
-    
-      az_command = "AP#{az_index}#{az_degrees}\r;"
-      el_command = "AP#{el_index}#{el_degrees}\r;"
-    
-      log "Sending AZ command: #{az_command.inspect}"
-      log "Sending EL command: #{el_command.inspect}"
-
-      @az_uart.write(az_command) if @az_uart
-      @el_uart.write(el_command) if @el_uart
+      @az_rotor.turn(coords.az)
+      @el_rotor.turn([coords.el, 0].max) # don't go below 0°
     
       @prev_coords = coords
     end

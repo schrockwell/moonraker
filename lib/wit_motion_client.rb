@@ -7,8 +7,9 @@ require 'uart'
 
 module Moonraker
   class WitMotionClient
-    def initialize(port, data_dir)
+    def initialize(port, baud, data_dir)
       @port = port
+      @baud = baud
       @data_dir = data_dir
 
       @cal_mutex = Mutex.new
@@ -19,12 +20,11 @@ module Moonraker
     def start(&callback)
       @heading_callback = callback
 
-      baud_rate = 9600
       data_bits = 8
       stop_bits = 1
       parity = SerialPort::NONE
 
-      @serial = SerialPort.new(@port, baud_rate, data_bits, stop_bits, parity)
+      @serial = SerialPort.new(@port, @baud, data_bits, stop_bits, parity)
       read_thread
     end
 
