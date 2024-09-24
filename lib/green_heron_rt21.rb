@@ -12,11 +12,12 @@ module Moonraker
   class GreenHeronRT21
     include Loggable
 
-    def init(name, config)
+    def initialize(name, config)
       @name = name
       @port = config['port']
       @baud = config['baud']
       @index = config['index']
+      @current_angle = nil
 
       raise "#{@name} rotor not found: #{@port}" unless File.exist?(@port)
     end
@@ -26,7 +27,6 @@ module Moonraker
       log "Opened #{@name} rotor"
 
       @poll_thread = poll_thread
-      @read_thread = read_thread
     end
 
     def turn(angle)
@@ -37,7 +37,6 @@ module Moonraker
 
     def close
       @poll_thread.kill
-      @read_thread.kill
       @uart.close
     end
 
@@ -46,17 +45,10 @@ module Moonraker
     def poll_thread
       Thread.new do
         loop do
-          @uart.write("AI#{@index};")
+          @uart.write("BI#{@index};")
+          response = @uart.read_next_string_command(';')
+          @current_angle = response.to_f
           sleep 1
-        end
-      end
-    end
-
-    def read_thread
-      Thread.new do
-        loop do
-          cmd = @uart.read_next_string_command(';')
-          puts cmd
         end
       end
     end

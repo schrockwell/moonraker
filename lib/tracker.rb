@@ -15,6 +15,8 @@ require_relative 'loggable'
 
 module Moonraker
   class Tracker
+    include Loggable
+    
     def initialize(config)
       @config = config
 
