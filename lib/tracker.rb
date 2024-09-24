@@ -71,7 +71,7 @@ module Moonraker
       el_degrees = [coords.el.round(1), 0].max # don't go below 0°
     
       az_command = "AP#{az_index}#{az_degrees}\r;"
-      el_command = "AP#{el_index}}#{el_degrees}\r;"
+      el_command = "AP#{el_index}#{el_degrees}\r;"
     
       log "Sending AZ command: #{az_command.inspect}"
       log "Sending EL command: #{el_command.inspect}"
