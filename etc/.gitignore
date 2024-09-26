@@ -1,3 +1,2 @@
-*.csv
-config.toml
-wit-cal.toml
+*
+!config.example.toml

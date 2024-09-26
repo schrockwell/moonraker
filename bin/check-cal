@@ -1,0 +1,47 @@
+#! /usr/bin/env ruby
+
+require_relative '../lib/wit_motion_imu'
+
+require 'gruff'
+
+input_path = ARGV[0]
+unless input_path
+    puts 'Usage: check-cal [csv_path]'
+    exit 1
+end
+
+output_path = input_path + '.check.csv'
+
+data = Moonraker::WitMotionIMU::Calibration.parse_measurements_file(input_path)
+cal = Moonraker::WitMotionIMU::Calibration.from_measurements(data)
+
+g = Gruff::Scatter.new
+xs = data.map { |d| d[0] }
+ys = data.map { |d| d[1] }
+g.data(:raw, xs, ys)
+g.show_vertical_markers = true
+g.write('etc/raw.png')
+
+corr_x = []
+corr_y = []
+
+File.open(output_path, 'w') do |output|
+    data.each do |row|
+        corrected = cal.apply(row)
+        corr_x << corrected[0]
+        corr_y << corrected[1]
+        output.puts (row + corrected).join(",")
+    end
+end
+
+g = Gruff::Scatter.new
+g.data(:corr, corr_x, corr_y)
+g.show_vertical_markers = true
+# g.minimum_x_value = -0.2
+# g.maximum_x_value = 0.2
+# g.minimum_value = -0.2
+# g.maximum_value = 0.2
+g.write('etc/corr.png')
+
+cal.save('etc/wit-cal.toml')
+

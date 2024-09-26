@@ -6,7 +6,7 @@ require 'fileutils'
 
 # ---------- Gems ----------
 
-require 'toml'
+require 'tomlib'
 
 # ---------- Lib ----------
 
@@ -23,7 +23,7 @@ trap('SIGTERM') { @tracker.stop }
 @config_path = File.join(@etc_path, 'config.toml')
 
 if File.exist?(@config_path)
-  @config = TOML.load_file(@config_path)
+  @config = Tomlib.load(File.read(@config_path))
   puts "Loaded config from #{File.absolute_path(@config_path)}"
 else
   print 'Config file not found. Would you like to create one? (y/n): '

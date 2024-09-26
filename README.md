@@ -4,6 +4,7 @@
 
 - Ruby 3.1.2
 - Bundler 2.3.7
+- ImageMagick
 
 ## Installation
 
@@ -14,6 +15,9 @@ source .bashrc
 
 # Install Ruby
 sudo apt install ruby-full
+
+# Install deps
+sudo apt-get install libmagickwand-dev
 
 # Install gems
 bundle

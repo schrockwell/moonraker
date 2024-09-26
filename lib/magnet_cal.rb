@@ -9,6 +9,8 @@ module Moonraker
     include Loggable
 
     def initialize(config, data_dir)
+      @data_dir = data_dir
+      
       @imu = WitMotionIMU.new(config['imu'], data_dir)
       @az_rotor = GreenHeronRT21.new('AZ', config['azimuth'])
       @el_rotor = GreenHeronRT21.new('EL', config['elevation'])
@@ -25,11 +27,15 @@ module Moonraker
         @az_rotor.open
         @el_rotor.open
 
-        steps = [
-          OpenStruct.new(az_steps: [1, 180, 359], el: 0),
-          OpenStruct.new(az_steps: [359, 180, 1], el: 45),
-          OpenStruct.new(az_steps: [1, 180, 359], el: 90),
-        ]
+        @az_rotor.set_over_travel(0)
+        @az_rotor.set_cw_limit(0)
+        @az_rotor.set_ccw_limit(0)
+
+        if @az_rotor.heading > 180
+          steps = [OpenStruct.new(az_steps: [359, 1], el: 0)]
+        else
+          steps = [OpenStruct.new(az_steps: [1, 359], el: 0)]
+        end
 
         steps.each.with_index do |step, step_index|
           log "--- STEP #{step_index + 1} OF #{steps.count} ---"
@@ -46,19 +52,25 @@ module Moonraker
           log "Waiting for AZ rotor to reach #{step.az_steps.first}°..."
           wait_for_heading(@az_rotor, step.az_steps.first)
           
-          if step_index == 0
-            log 'Starting data collection...'
-            @imu.start_calibration
-          end
+          @imu.start_raw_capture
 
           step.az_steps[1..-1].each do |step_az|
             log "Waiting for AZ rotor to reach #{step_az}°..."
             @az_rotor.turn(step_az)
             wait_for_heading(@az_rotor, step_az)
           end
+
+          data = @imu.end_raw_capture
+          File.open(File.join(@data_dir, "wit-cal-data-#{Time.now.to_i}.csv"), 'w') do |f|
+            # [x, y, z, roll, pitch, yaw]
+            data.each { |row| f.puts row[0..2].join(',')}
+          end
+
+          cal = WitMotionIMU::Calibration.from_measurements(data)
+          cal.save(File.join(@data_dir, 'wit-cal.toml'))
+          @imu.calibration = cal
         end
 
-        @imu.end_calibration
         log '*** Magnetometer calibration sequence complete ***'
 
         @imu.stop

@@ -1,6 +1,6 @@
 class IO
   # For serial components
-  def read_next_string_command(terminator)
+  def read_next_string_command(terminator = ';')
     buffer = ''
 
     while true do

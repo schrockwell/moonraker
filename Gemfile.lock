@@ -5,10 +5,20 @@ GEM
       matrix (~> 0.4.2)
       rake (~> 13.0)
       rspec (~> 3.0)
+    bigdecimal (3.1.8)
     diff-lcs (1.5.1)
+    gruff (0.25.0)
+      bigdecimal (>= 3.0)
+      histogram
+      rmagick (>= 5.5)
+    histogram (0.2.4.1)
     matrix (0.4.2)
-    parslet (2.0.0)
+    observer (0.1.2)
+    pkg-config (1.5.6)
     rake (13.2.1)
+    rmagick (6.0.1)
+      observer (~> 0.1)
+      pkg-config (~> 1.4)
     rspec (3.13.0)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -23,8 +33,8 @@ GEM
       rspec-support (~> 3.13.0)
     rspec-support (3.13.1)
     ruby-termios (1.1.0)
-    toml (0.3.0)
-      parslet (>= 1.8.0, < 3.0.0)
+    tomlib (0.7.2)
+      bigdecimal
     uart (1.0.0)
       ruby-termios
 
@@ -33,7 +43,9 @@ PLATFORMS
 
 DEPENDENCIES
   astronoby (~> 0.5.0)
-  toml (~> 0.3.0)
+  gruff (~> 0.25.0)
+  matrix (~> 0.4.2)
+  tomlib (~> 0.7.2)
   uart (~> 1.0)
 
 BUNDLED WITH

@@ -28,7 +28,16 @@ module Moonraker
 
       @az_rotor = GreenHeronRT21.new('AZ', @config['azimuth'])
       @el_rotor = GreenHeronRT21.new('EL', @config['elevation'])
-      @imu = WitMotionIMU.new(@config['imu'], data_dir)
+
+      imu_cal_path = File.join(data_dir, 'wit-cal.toml')
+      if File.exist?(imu_cal_path)
+        log 'Loaded IMU compass calibration'
+        imu_cal = WitMotionIMU::Calibration.load_file(imu_cal_path)
+      else
+        log "*** WARNING! *** NO COMPASS CALIBRATION DATA"
+        imu_cal = WitMotionIMU::Calibration.new
+      end
+      @imu = WitMotionIMU.new(@config['imu'], data_dir, calibration: imu_cal)
 
       @az_rotor.on_heading = ->(heading) { log "Rotor AZ @ #{heading}°" }
       @el_rotor.on_heading = ->(heading) { log "Rotor EL @ #{heading}°" }

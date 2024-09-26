@@ -4,31 +4,176 @@ require 'thread'
 
 # ---------- Gems ----------
 
+require 'matrix'
+require 'tomlib'
 require 'uart'
 
 require_relative 'loggable'
 
 module Moonraker
   class WitMotionIMU
+    class Calibration
+      def initialize(offset = nil, scaling = nil, rotation = nil)
+        @offset = offset || [0, 0, 0]
+        @scaling = scaling || [1, 1, 1]
+        @rotation = rotation || Matrix.identity(3)
+      end
+
+      def save(path)
+        calibration = {
+          'offset' => @offset.to_a,
+          'scaling' => @scaling.to_a,
+          'rotation' => @rotation.to_a
+        }
+
+        File.open(path, 'w') do |f|
+          f.write(Tomlib.dump(calibration))
+        end
+      end
+
+      def self.load_file(path)
+        calibration = Tomlib.load(File.read(path))
+        
+        # IMPORTANT! Note the splat (*) operator here
+        self.new(
+          calibration['offset'],
+          calibration['scaling'],
+          Matrix[*calibration['rotation']],
+        )
+      end
+
+      def self.parse_measurements_file(path)
+        File.read(path).split("\n").map { |l| l.split(",").map(&:to_f) }
+      end
+
+      def self.from_measurements_file(path)
+        from_measurements(parse_measurements_file(path))
+      end
+
+      # Fit an ellipsoid to the 3D points
+      def self.fit_ellipsoid(points)
+        # Each point (x, y, z) generates one row of a matrix equation
+        design_matrix = points.map do |x, y, z|
+          [x**2, y**2, z**2, 2 * x * y, 2 * x * z, 2 * y * z]
+        end
+
+        # Set up the target values (1 for each point)
+        target = Array.new(points.size, 1)
+
+        # Solve the linear system using least squares (normal equations)
+        design_matrix = Matrix[*design_matrix]
+        target_vector = Vector.elements(target)
+
+        coefficients = (design_matrix.transpose * design_matrix).inverse * design_matrix.transpose * target_vector
+        coefficients.to_a
+      end
+
+      # Extract ellipsoid semi-axes and rotation matrix from the coefficients
+      def self.ellipsoid_parameters(coefficients)
+        a, b, c, d, e, f = coefficients
+
+        # Construct the ellipsoid matrix from the coefficients
+        ellipsoid_matrix = Matrix[
+          [a, d, e],
+          [d, b, f],
+          [e, f, c]
+        ]
+
+        # Eigenvalue decomposition gives us the semi-axes and rotation matrix
+        eigen = Matrix::EigenvalueDecomposition.new(ellipsoid_matrix)
+
+        # Semi-axes lengths are the inverse of the square roots of the eigenvalues
+        semi_axes_lengths = eigen.eigenvalues.map { |val| 1.0 / Math.sqrt(val) }
+
+        # Rotation matrix is the matrix of eigenvectors
+        rotation_matrix = eigen.eigenvector_matrix
+
+        # Check the determinant of the rotation matrix
+        if rotation_matrix.determinant < 0
+          # If determinant is negative, flip one axis to correct the mirroring
+          rotation_matrix = rotation_matrix.map.with_index do |value, index|
+            # Negate the first column (or any one column) to flip the orientation
+            index % 3 == 0 ? value : -value
+          end
+        end
+
+        {
+          a: semi_axes_lengths[0], # Semi-axis along x
+          b: semi_axes_lengths[1], # Semi-axis along y
+          c: semi_axes_lengths[2], # Semi-axis along z
+          rotation_matrix: rotation_matrix
+        }
+      end
+
+      def self.from_measurements(points)
+        n = points.size
+        min_x, min_y, min_z = Float::INFINITY, Float::INFINITY, Float::INFINITY
+        max_x, max_y, max_z = -Float::INFINITY, -Float::INFINITY, -Float::INFINITY
+      
+        # Compute the average of x, y, z to find the offset (center of ellipse)
+        points.each do |x, y, z|
+          min_x = [x, min_x].min
+          min_y = [y, min_y].min
+          min_z = [z, min_z].min
+          max_x = [x, max_x].max
+          max_y = [y, max_y].max
+          max_z = [z, max_z].max
+        end
+
+        offset_x = (min_x + max_x) / 2
+        offset_y = (min_y + max_y) / 2
+        offset_z = (min_z + max_z) / 2
+      
+        # Step 2: Correct for hard iron effect by shifting the points
+        corrected_points = points.map do |x, y, z|
+          [x - offset_x, y - offset_y, z - offset_z]
+        end
+
+        coeffs = fit_ellipsoid(corrected_points)
+        params = ellipsoid_parameters(coeffs)
+
+        offset = [offset_x, offset_y, offset_z]
+        scaling = [params[:a], params[:b], params[:c]]
+        rotation = params[:rotation_matrix]
+
+        self.new(offset, scaling, rotation)
+      end
+
+      def apply(point)
+        x = point[0] - @offset[0]
+        y = point[1] - @offset[1]
+        z = point[2] - @offset[2]
+
+        # Apply the inverse rotation
+        rotated_point = @rotation.transpose * Vector[x, y, z]
+        
+        # Scale the point to map the ellipsoid to a unit sphere
+        [
+          rotated_point[0] / @scaling[0],
+          rotated_point[1] / @scaling[1],
+          rotated_point[2] / @scaling[2]
+        ]
+      end
+    end
+
     include Loggable
 
-    attr_accessor :on_azimuth, :on_elevation
+    attr_accessor :on_azimuth, :on_elevation, :calibration
 
-    def initialize(config, data_dir)
+    def initialize(config, data_dir, opts = {})
       @port = config['port'] || raise('port is required')
       @baud = config['baud'] || raise('baud is required')
       @declination = config['magnetic_declination'] || raise('magnetic_declination is required')
       @data_dir = data_dir
+      @calibration = opts[:calibration] || Calibration.new
 
       @roll_degrees = 0.0
       @pitch_degrees = 0.0
       @yaw_degrees = 0.0
 
-      @cal_mutex = Mutex.new
+      @capture_mutex = Mutex.new
       @on_azimuth = nil
       @on_elevation = nil
-
-      load_calibration
     end
     
     def start
@@ -42,44 +187,25 @@ module Moonraker
       @uart.close
     end
 
-    def start_calibration
-      @cal_mutex.synchronize do
-        return if @calibrating
+    def start_raw_capture
+      @capture_mutex.synchronize do
+        return if @capturing
 
-        @min_x = nil
-        @max_x = nil
-        @min_y = nil
-        @max_y = nil
-        @min_z = nil
-        @max_z = nil
+        @capturing = true
+        @cal_data = []
 
-        @calibrating = true
-        @cal_data_file = File.open(File.join(@data_dir, "wit-cal-data-#{Time.now.to_i}.csv"), 'w')
-        @cal_data_file.puts('x,y,z,roll,pitch,yaw')
-
-        log 'Starting calibration...'
+        log 'Starting capture...'
       end
     end
 
-    def end_calibration
-      @cal_mutex.synchronize do
-        return unless @calibrating
+    def end_raw_capture
+      @capture_mutex.synchronize do
+        return unless @capturing
 
-        @calibrating = false
-        @cal_data_file.close
-
-        log 'Computing calibration...'
-        
-        save_calibration({
-          'x_offset' => -(@min_x + @max_x) / 2,
-          'y_offset' => -(@min_y + @max_y) / 2,
-          'z_offset' => -(@min_z + @max_z) / 2
-        })
+        log 'Ended capture'
+        @capturing = false
+        @cal_data
       end
-    end
-
-    def calibrating?
-      @calibrating
     end
 
     def read_thread
@@ -114,35 +240,6 @@ module Moonraker
 
     private
 
-    def calibration_path
-      File.join(@data_dir, 'wit-cal.toml')
-    end
-
-    def load_calibration
-      if File.exist?(calibration_path)
-        @calibration = TOML.load_file(calibration_path)
-        log 'Loaded magnetometer calibration data.'
-      else
-        log '*** WARNING! *** No calibration data for magnetometer. Using default values.'
-
-        @calibration = {
-          'x_offset' => 0,
-          'y_offset' => 0,
-          'z_offset' => 0
-        }
-      end
-    end
-
-    def save_calibration(new_calibration)
-      @calibration = new_calibration
-
-      File.open(calibration_path, 'w') do |f|
-        f.write(TOML::Generator.new(@calibration).body)
-      end
-
-      log 'Saved calibration data.'
-    end
-
     def parse_magnet_message(buffer)
       # Ensure buffer is of the correct size (1 for 0x54 + 8 for data + 1 for checksum)
       return unless buffer.size == 11
@@ -161,31 +258,17 @@ module Moonraker
       # Parse X, Y, Z, and Temperature from the buffer (little-endian)
       x, y, z = buffer[2..7].unpack('s<s<s<') # 16-bit signed integers, little-endian
     
-      @cal_mutex.synchronize do
-        if @calibrating
-          @max_x = [x, @max_x].compact.max
-          @min_x = [x, @min_x].compact.min
-          @max_y = [y, @max_y].compact.max
-          @min_y = [y, @min_y].compact.min
-          @max_z = [z, @max_z].compact.max
-          @min_z = [z, @min_z].compact.min
-
-          @cal_data_file.puts("#{x},#{y},#{z},#{@roll_degrees},#{@pitch_degrees},#{@yaw_degrees}")
-
+      @capture_mutex.synchronize do
+        if @capturing
+          @cal_data << [x, y, z]
           return
         end
       end
-    
-      # Apply the known offsets
-      x = x + @calibration['x_offset']
-      y = y + @calibration['y_offset']
-      z = z + @calibration['z_offset']
+
+      x, y, z = @calibration.apply([x, y, z])
       
       # Sensor is placed with the mounting plate facing the ground, and the +Y axis pointing down the
       # boom of the antenna.
-
-      # puts "Pitch: #{@pitch_degrees}"
-      # puts "Roll: #{@roll_degrees}"
 
       azimuth_degrees = calculate_azimuth(x, y, z, @pitch_degrees / 180.0 * Math::PI, @roll_degrees / 180.0 * Math::PI)
       magnetic_heading = (azimuth_degrees + 360) % 360
